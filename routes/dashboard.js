@@ -51,15 +51,15 @@ router.get("/task-status", async (req, res) => {
 // Fetch trend data for AreaChart
 router.get("/trends", async (req, res) => {
   try {
-    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"];
+    const now = new Date();
     const trendData = [];
 
-    const sixMonthsAgo = new Date();
-    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    for (let i = 5; i >= 0; i--) {
+      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const monthName = date.toLocaleString("default", { month: "short" });
 
-    for (let i = 0; i < 6; i++) {
-      const startDate = new Date(sixMonthsAgo.getFullYear(), sixMonthsAgo.getMonth() + i, 1);
-      const endDate = new Date(sixMonthsAgo.getFullYear(), sixMonthsAgo.getMonth() + i + 1, 0);
+      const startDate = new Date(date.getFullYear(), date.getMonth(), 1);
+      const endDate = new Date(date.getFullYear(), date.getMonth() + 1, 0);
 
       const projects = await prisma.project.count({
         where: {
@@ -80,7 +80,7 @@ router.get("/trends", async (req, res) => {
       });
 
       trendData.push({
-        month: months[i],
+        month: monthName,
         projects,
         tasks,
       });
