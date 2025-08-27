@@ -1,0 +1,16 @@
+model Resource {
+  id               Int      @id @default(autoincrement())
+  resourceType     String                                // e.g., Developer, Designer, Equipment
+  assignedProject  String                                // e.g., Developer, Designer, Equipment
+  projectId        Int                                   // FK to Project
+  allocationStart  DateTime                              // When allocation starts
+  allocationEnd    DateTime                              // When allocation ends
+  utilizationRate  Float                                 // Utilization percentage (0–100)
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relation
+  project Project @relation(fields: [projectId], references: [id])
+}

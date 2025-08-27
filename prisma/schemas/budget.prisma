@@ -1,0 +1,16 @@
+model Risk {
+  id             Int      @id @default(autoincrement()) // Risk ID
+  projectId      Int                                     // Project ID (FK)
+  description    String                                  // Risk Description
+  severityLevel  String                                  // Severity Level (High / Medium / Low)
+  mitigationPlan String                                  // Mitigation Plan
+  riskOwner      String                                  // Risk Owner
+  status         String                                  // Status (Open / Resolved)
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relation to Project
+  project   Project @relation(fields: [projectId], references: [id])
+}
