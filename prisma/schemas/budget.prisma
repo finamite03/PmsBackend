@@ -1,6 +1,7 @@
 model Risk {
   id             Int      @id @default(autoincrement()) // Risk ID
   projectId      Int                                     // Project ID (FK)
+  companyId      Int                                     // Company ID (FK)
   description    String                                  // Risk Description
   severityLevel  String                                  // Severity Level (High / Medium / Low)
   mitigationPlan String                                  // Mitigation Plan
@@ -13,4 +14,5 @@ model Risk {
 
   // Relation to Project
   project   Project @relation(fields: [projectId], references: [id])
+  company Company @relation(fields: [companyId], references: [id])
 }

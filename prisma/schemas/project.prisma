@@ -1,5 +1,6 @@
 model Project {
   id             Int           @id @default(autoincrement()) // Primary Key
+  companyId      Int                                      // Company ID (FK)
   name           String
   clientName     String
   startDate      DateTime
@@ -15,6 +16,7 @@ model Project {
   updatedAt DateTime @updatedAt
 
   // Relations
+  company    Company   @relation(fields: [companyId], references: [id])
   tasks      Task[]
   risks      Risk[]
   resources  Resource[]

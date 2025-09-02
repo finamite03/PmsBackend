@@ -1,18 +1,20 @@
 model Task {
-  id              Int      @id @default(autoincrement())
-  projectId       Int      // Foreign Key → Project.id
-  title           String                           // Task title / name
-  assignedTo      String                           // Assigned or delegated to
-  priority        String                           // High / Medium / Low
-  status          String                           // Pending / In Progress / Completed
-  startDate       DateTime
-  endDate         DateTime
-  completionDate  DateTime?                        // Nullable in case not completed yet
+  id             Int      @id @default(autoincrement())
+  companyId      Int                                     // Company ID (FK)
+  projectId      Int                                     // Foreign Key → Project.id
+  title          String                                  // Task title / name
+  assignedTo     String                                  // Assigned or delegated to
+  priority       String                                  // High / Medium / Low
+  status         String                                  // Pending / In Progress / Completed
+  startDate      DateTime
+  endDate        DateTime
+  completionDate DateTime?                               // Nullable in case not completed yet
 
   // Timestamps
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // Relation
+  // Relations
+  company Company @relation(fields: [companyId], references: [id])
   project Project @relation(fields: [projectId], references: [id])
 }

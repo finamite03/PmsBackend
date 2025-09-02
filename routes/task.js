@@ -1,6 +1,7 @@
 // routes/task.js
 import express from "express";
 import { PrismaClient } from "@prisma/client";
+import { authenticateToken } from "../middleware/auth.js";
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -8,7 +9,7 @@ const prisma = new PrismaClient();
 /**
  * CREATE a new Task
  */
-router.post("/", async (req, res) => {
+router.post("/", authenticateToken, async (req, res) => {
   try {
     const {
       projectId,
@@ -25,6 +26,14 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ error: "Request body is empty" });
     }
 
+    // Ensure project belongs to the same company
+    const project = await prisma.project.findFirst({
+      where: { id: Number(projectId), companyId: req.user.companyId },
+    });
+    if (!project) {
+      return res.status(400).json({ error: "Invalid project or unauthorized access" });
+    }
+
     const newTask = await prisma.task.create({
       data: {
         projectId: Number(projectId),
@@ -32,9 +41,10 @@ router.post("/", async (req, res) => {
         assignedTo,
         priority,
         status,
-        startDate: new Date(startDate),
-        endDate: new Date(endDate),
+        startDate: startDate ? new Date(startDate) : null,
+        endDate: endDate ? new Date(endDate) : null,
         completionDate: completionDate ? new Date(completionDate) : null,
+        companyId: req.user.companyId, // ✅ multitenant
       },
     });
 
@@ -48,9 +58,10 @@ router.post("/", async (req, res) => {
 /**
  * READ all Tasks
  */
-router.get("/", async (req, res) => {
+router.get("/", authenticateToken, async (req, res) => {
   try {
     const tasks = await prisma.task.findMany({
+      where: { companyId: req.user.companyId }, // ✅ scoped
       include: { project: true },
     });
     res.json(tasks);
@@ -63,11 +74,11 @@ router.get("/", async (req, res) => {
 /**
  * READ single Task by ID
  */
-router.get("/:id", async (req, res) => {
+router.get("/:id", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const task = await prisma.task.findUnique({
-      where: { id: Number(id) },
+    const task = await prisma.task.findFirst({
+      where: { id: Number(id), companyId: req.user.companyId }, // ✅ scoped
       include: { project: true },
     });
 
@@ -82,7 +93,7 @@ router.get("/:id", async (req, res) => {
 /**
  * UPDATE a Task
  */
-router.put("/:id", async (req, res) => {
+router.put("/:id", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const {
@@ -94,6 +105,12 @@ router.put("/:id", async (req, res) => {
       endDate,
       completionDate,
     } = req.body;
+
+    // Ensure task belongs to the company
+    const existing = await prisma.task.findFirst({
+      where: { id: Number(id), companyId: req.user.companyId },
+    });
+    if (!existing) return res.status(404).json({ error: "Task not found" });
 
     const updatedTask = await prisma.task.update({
       where: { id: Number(id) },
@@ -118,9 +135,15 @@ router.put("/:id", async (req, res) => {
 /**
  * DELETE a Task
  */
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
+
+    // Ensure task belongs to the company
+    const existing = await prisma.task.findFirst({
+      where: { id: Number(id), companyId: req.user.companyId },
+    });
+    if (!existing) return res.status(404).json({ error: "Task not found" });
 
     await prisma.task.delete({
       where: { id: Number(id) },

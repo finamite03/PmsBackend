@@ -1,0 +1,45 @@
+model Company {
+  id          Int       @id @default(autoincrement())
+  companyName String
+  plan        Plan      @default(BASIC)
+  adminName   String
+  adminEmail  String    @unique
+  adminPassword String  // store hashed password here
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  maxAdmins     Int       @default(2) // BASIC: 2, PRO: 5, PLATINUM: 7
+  maxManagers   Int       @default(5) // BASIC: 5, PRO: 8, PLATINUM: 10
+  maxUsers      Int       @default(15) // BASIC: 15, PRO: 20, PLATINUM: 25
+
+  // Relations
+  users       User[]
+  projects    Project[]
+  tasks       Task[]
+  risks       Risk[]
+  resources   Resource[]
+
+  @@index([plan])
+}
+
+enum Plan {
+  BASIC
+  PRO
+  PLATINUM
+}
+
+model User {
+  id         Int       @id @default(autoincrement())
+  name       String
+  email      String    @unique
+  password   String
+  role       String
+  status     String    @default("ACTIVE")
+  permissions Json?
+  lastLogin  DateTime?
+
+  companyId  Int?
+  company    Company?  @relation(fields: [companyId], references: [id])
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}

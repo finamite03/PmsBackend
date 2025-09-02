@@ -14,6 +14,7 @@ import projectRoutes from "./routes/project.js";
 import resourceRoutes from "./routes/resource.js";
 import tasksRoutes from "./routes/task.js";   // ✅ renamed to match your task.js
 import userRoutes from "./routes/user.js";
+import companyRoutes from "./routes/company.js";
 
 const app = express();
 const prisma = new PrismaClient();
@@ -37,6 +38,7 @@ app.use("/api/projects", projectRoutes);
 app.use("/api/resources", resourceRoutes);
 app.use("/api/tasks", tasksRoutes);
 app.use("/api/user", userRoutes);
+app.use("/api/company", companyRoutes);
 
 // =======================
 // USER ROUTES (inline since you handle auth here)

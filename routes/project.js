@@ -5,12 +5,23 @@ import { authenticateToken } from "../middleware/auth.js";
 
 const prisma = new PrismaClient();
 const router = express.Router();
+
 /**
  * CREATE a new Project
  */
 router.post("/", authenticateToken, async (req, res) => {
   try {
-    const { name, clientName, startDate, endDate, projectManager, budget, status, priorityLevel, notes } = req.body;
+    const {
+      name,
+      clientName,
+      startDate,
+      endDate,
+      projectManager,
+      budget,
+      status,
+      priorityLevel,
+      notes,
+    } = req.body;
 
     const newProject = await prisma.project.create({
       data: {
@@ -23,6 +34,7 @@ router.post("/", authenticateToken, async (req, res) => {
         status,
         priorityLevel,
         notes,
+        companyId: req.user.companyId, // ✅ attach company
       },
     });
 
@@ -32,10 +44,11 @@ router.post("/", authenticateToken, async (req, res) => {
   }
 });
 
-// Protected: Fetch all projects
+// Protected: Fetch all projects for this company
 router.get("/", authenticateToken, async (req, res) => {
   try {
     const projects = await prisma.project.findMany({
+      where: { companyId: req.user.companyId }, // ✅ scoped
       include: { tasks: true, risks: true, resources: true },
     });
     res.json(projects);
@@ -47,11 +60,14 @@ router.get("/", authenticateToken, async (req, res) => {
 /**
  * READ single Project by ID
  */
-router.get("/:id", async (req, res) => {
+router.get("/:id", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const project = await prisma.project.findUnique({
-      where: { id: Number(id) },
+    const project = await prisma.project.findFirst({
+      where: {
+        id: Number(id),
+        companyId: req.user.companyId, // ✅ scoped
+      },
       include: {
         tasks: true,
         risks: true,
@@ -70,7 +86,7 @@ router.get("/:id", async (req, res) => {
 /**
  * UPDATE a Project
  */
-router.put("/:id", async (req, res) => {
+router.put("/:id", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const {
@@ -84,6 +100,12 @@ router.put("/:id", async (req, res) => {
       priorityLevel,
       notes,
     } = req.body;
+
+    // Ensure project belongs to company
+    const existing = await prisma.project.findFirst({
+      where: { id: Number(id), companyId: req.user.companyId },
+    });
+    if (!existing) return res.status(404).json({ error: "Project not found" });
 
     const updatedProject = await prisma.project.update({
       where: { id: Number(id) },
@@ -110,14 +132,20 @@ router.put("/:id", async (req, res) => {
 /**
  * DELETE a Project
  */
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const projectId = Number(id);
 
+    // Ensure project belongs to company
+    const existing = await prisma.project.findFirst({
+      where: { id: projectId, companyId: req.user.companyId },
+    });
+    if (!existing) return res.status(404).json({ error: "Project not found" });
+
     // Check if the project has associated tasks
     const taskCount = await prisma.task.count({
-      where: { projectId },
+      where: { projectId, companyId: req.user.companyId },
     });
 
     if (taskCount > 0) {
@@ -134,11 +162,12 @@ router.delete("/:id", async (req, res) => {
     res.json({ message: "Project deleted successfully" });
   } catch (err) {
     console.error("Delete error:", err);
-    if (err.code === 'P2025') {
+    if (err.code === "P2025") {
       res.status(404).json({ error: "Project not found" });
     } else {
       res.status(500).json({ error: "Failed to delete project", details: err.message });
     }
   }
 });
+
 export default router;

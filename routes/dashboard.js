@@ -1,17 +1,21 @@
-// dashboard.js
+// routes/dashboard.js
 import express from "express";
 import { PrismaClient } from "@prisma/client";
+import { authenticateToken } from "../middleware/auth.js"; // ✅ Import middleware
 
 const router = express.Router();
 const prisma = new PrismaClient();
+
+// ✅ Protect all routes with JWT
+router.use(authenticateToken);
 
 // Fetch project status counts for PieChart
 router.get("/project-status", async (req, res) => {
   try {
     const projects = await prisma.project.findMany({
+      where: { companyId: req.user.companyId }, // ✅ scoped
       select: { status: true },
     });
-    console.log("Projects fetched for status:", projects);
 
     const statusCounts = [
       { name: "Planned", value: projects.filter(p => p.status === "PLANNED").length },
@@ -31,9 +35,9 @@ router.get("/project-status", async (req, res) => {
 router.get("/task-status", async (req, res) => {
   try {
     const tasks = await prisma.task.findMany({
+      where: { companyId: req.user.companyId }, // ✅ scoped
       select: { status: true },
     });
-    console.log("Tasks fetched for status:", tasks);
 
     const statusCounts = [
       { name: "Pending", value: tasks.filter(t => t.status === "PENDING").length },
@@ -63,19 +67,15 @@ router.get("/trends", async (req, res) => {
 
       const projects = await prisma.project.count({
         where: {
-          createdAt: {
-            gte: startDate,
-            lte: endDate,
-          },
+          companyId: req.user.companyId, // ✅ scoped
+          createdAt: { gte: startDate, lte: endDate },
         },
       });
 
       const tasks = await prisma.task.count({
         where: {
-          createdAt: {
-            gte: startDate,
-            lte: endDate,
-          },
+          companyId: req.user.companyId, // ✅ scoped
+          createdAt: { gte: startDate, lte: endDate },
         },
       });
 
@@ -86,7 +86,6 @@ router.get("/trends", async (req, res) => {
       });
     }
 
-    console.log("Trend data fetched:", trendData);
     res.json(trendData);
   } catch (err) {
     console.error("Error in /trends:", err);
@@ -98,28 +97,25 @@ router.get("/trends", async (req, res) => {
 router.get("/overview", async (req, res) => {
   try {
     const projects = await prisma.project.findMany({
+      where: { companyId: req.user.companyId }, // ✅ scoped
       include: { tasks: true, risks: true, resources: true },
     });
 
     const tasks = await prisma.task.findMany({
+      where: { companyId: req.user.companyId }, // ✅ scoped
       include: { project: true },
     });
 
     const resources = await prisma.resource.findMany({
+      where: { companyId: req.user.companyId }, // ✅ scoped
       include: { project: true },
     });
 
-    console.log("Overview data fetched:", { projects, tasks, resources });
-    res.json({
-      projects,
-      tasks,
-      resources,
-    });
+    res.json({ projects, tasks, resources });
   } catch (err) {
     console.error("Error in /overview:", err);
     res.status(400).json({ error: err.message });
   }
 });
-
 
 export default router;
