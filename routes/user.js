@@ -9,77 +9,113 @@ const router = express.Router();
 const SALT_ROUNDS = 10;
 
 const planLimits = {
-    BASIC: { maxAdmins: 2, maxManagers: 5, maxUsers: 15 },
-    PRO: { maxAdmins: 5, maxManagers: 8, maxUsers: 20 },
-    PLATINUM: { maxAdmins: 7, maxManagers: 10, maxUsers: 25 },
+  BASIC: { maxAdmins: 2, maxManagers: 5, maxUsers: 15 },
+  PRO: { maxAdmins: 5, maxManagers: 8, maxUsers: 20 },
+  PLATINUM: { maxAdmins: 7, maxManagers: 10, maxUsers: 25 },
 };
 
 /**
  * CREATE a new user (must belong to same company)
  */
+/**
+ * CREATE a new user (must belong to same company)
+ */
 router.post("/", authenticateToken, async (req, res) => {
-    try {
-        if (req.user.role !== "admin" && req.user.role !== "superadmin") {
-            return res.status(403).json({ error: "Only admin or superadmin can create users" });
-        }
-
-        const { name, email, password, role, companyId, status } = req.body;
-
-        if (!name || !email || !password || !role || !companyId) {
-            return res.status(400).json({ error: "name, email, password, role, and companyId are required" });
-        }
-
-        if (!["admin", "manager", "user"].includes(role)) {
-            return res.status(400).json({ error: "Invalid role. Must be admin, manager, or user" });
-        }
-
-        // Verify company exists and get plan
-        const company = await prisma.company.findUnique({
-            where: { id: parseInt(companyId) },
-            select: { plan: true, maxAdmins: true, maxManagers: true, maxUsers: true },
-        });
-        if (!company) {
-            return res.status(404).json({ error: "Company not found" });
-        }
-
-        // Check current counts against plan limits
-        const [adminCount, managerCount, userCount] = await Promise.all([
-            prisma.user.count({ where: { companyId: parseInt(companyId), role: "admin" } }),
-            prisma.user.count({ where: { companyId: parseInt(companyId), role: "manager" } }),
-            prisma.user.count({ where: { companyId: parseInt(companyId), role: "user" } }),
-        ]);
-
-        if (role === "admin" && adminCount >= company.maxAdmins) {
-            return res.status(400).json({ error: `Cannot add more admins: limit of ${company.maxAdmins} reached` });
-        }
-        if (role === "manager" && managerCount >= company.maxManagers) {
-            return res.status(400).json({ error: `Cannot add more managers: limit of ${company.maxManagers} reached` });
-        }
-        if (role === "user" && userCount >= company.maxUsers) {
-            return res.status(400).json({ error: `Cannot add more users: limit of ${company.maxUsers} reached` });
-        }
-
-        // Hash password
-        const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
-
-        // Create user
-        const newUser = await prisma.user.create({
-            data: {
-                name,
-                email,
-                password: hashedPassword,
-                role,
-                status: status || "ACTIVE",
-                companyId: parseInt(companyId),
-            },
-            select: { id: true, name: true, email: true, role: true, status: true, lastLogin: true },
-        });
-
-        res.status(201).json({ message: "User created successfully", user: newUser });
-    } catch (error) {
-        console.error("Error creating user:", error);
-        res.status(500).json({ error: "Error creating user", details: error.message });
+  try {
+    if (req.user.role !== "admin" && req.user.role !== "superadmin") {
+      return res
+        .status(403)
+        .json({ error: "Only admin or superadmin can create users" });
     }
+
+    const { name, email, password, role, companyId, status, permissions } = req.body;
+
+    if (!name || !email || !password || !role || !companyId) {
+      return res.status(400).json({
+        error: "name, email, password, role, and companyId are required",
+      });
+    }
+
+    if (!["admin", "manager", "user"].includes(role)) {
+      return res
+        .status(400)
+        .json({ error: "Invalid role. Must be admin, manager, or user" });
+    }
+
+    // Verify company exists and get plan
+    const company = await prisma.company.findUnique({
+      where: { id: parseInt(companyId) },
+      select: {
+        plan: true,
+        maxAdmins: true,
+        maxManagers: true,
+        maxUsers: true,
+      },
+    });
+    if (!company) {
+      return res.status(404).json({ error: "Company not found" });
+    }
+
+    // Check current counts against plan limits
+    const [adminCount, managerCount, userCount] = await Promise.all([
+      prisma.user.count({ where: { companyId: parseInt(companyId), role: "admin" } }),
+      prisma.user.count({ where: { companyId: parseInt(companyId), role: "manager" } }),
+      prisma.user.count({ where: { companyId: parseInt(companyId), role: "user" } }),
+    ]);
+
+    if (role === "admin" && adminCount >= company.maxAdmins) {
+      return res
+        .status(400)
+        .json({ error: `Cannot add more admins: limit of ${company.maxAdmins} reached` });
+    }
+    if (role === "manager" && managerCount >= company.maxManagers) {
+      return res
+        .status(400)
+        .json({ error: `Cannot add more managers: limit of ${company.maxManagers} reached` });
+    }
+    if (role === "user" && userCount >= company.maxUsers) {
+      return res
+        .status(400)
+        .json({ error: `Cannot add more users: limit of ${company.maxUsers} reached` });
+    }
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
+
+    // Always store permissions (default [])
+    const finalPermissions = Array.isArray(permissions) ? permissions : [];
+
+    // Create user
+    const newUser = await prisma.user.create({
+      data: {
+        name,
+        email,
+        password: hashedPassword,
+        role,
+        status: status || "ACTIVE",
+        companyId: parseInt(companyId),
+        permissions: finalPermissions, // ✅ save permissions too
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        status: true,
+        lastLogin: true,
+        permissions: true,
+      },
+    });
+
+    res
+      .status(201)
+      .json({ message: "User created successfully", user: newUser });
+  } catch (error) {
+    console.error("Error creating user:", error);
+    res
+      .status(500)
+      .json({ error: "Error creating user", details: error.message });
+  }
 });
 
 
@@ -122,6 +158,7 @@ router.post("/login", async (req, res) => {
         email: user.email,
         role: user.role,
         companyId: user.companyId, // ✅ include company
+        permissions: user.permissions || []
       },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN || "1d" }
@@ -272,5 +309,49 @@ router.delete("/:id", authenticateToken, async (req, res) => {
       .json({ error: "Error deleting user", details: error.message });
   }
 });
+
+
+/**
+ * UPDATE user password (multi-tenant)
+ */
+router.put("/:id/password", authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { password } = req.body;
+
+    if (!password || password.length < 6) {
+      return res.status(400).json({ error: "Password must be at least 6 characters long" });
+    }
+
+    // Ensure the user belongs to the same company (multi-tenant safe)
+    const existing = await prisma.user.findFirst({
+      where: {
+        id: parseInt(id),
+        companyId: req.user.companyId, // ✅ scoped to tenant
+      },
+    });
+
+    if (!existing) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
+
+    // Update password only
+    await prisma.user.update({
+      where: { id: parseInt(id) },
+      data: { password: hashedPassword },
+    });
+
+    res.json({ message: "Password updated successfully" });
+  } catch (error) {
+    res
+      .status(400)
+      .json({ error: "Error updating password", details: error.message });
+  }
+});
+
+
 
 export default router;
