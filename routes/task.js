@@ -167,23 +167,28 @@ router.put("/:id", authenticateToken, async (req, res) => {
  * DELETE a Task
  */
 // DELETE Task
+// Soft delete a Task (mark as deleted)
 router.delete("/:id", authenticateToken, async (req, res) => {
   try {
-    if (req.user.role !== "admin") {
-      return res.status(403).json({ error: "Only admins can delete tasks" });
-    }
-
     const { id } = req.params;
-    const existing = await prisma.task.findFirst({
+
+    // Ensure task belongs to same company
+    const task = await prisma.task.findFirst({
       where: { id: Number(id), companyId: req.user.companyId },
     });
-    if (!existing) return res.status(404).json({ error: "Task not found" });
 
-    await prisma.task.delete({ where: { id: Number(id) } });
-    res.json({ message: "Task deleted successfully" });
+    if (!task) return res.status(404).json({ error: "Task not found" });
+
+    // Instead of deleting, mark as deleted
+    const updatedTask = await prisma.task.update({
+      where: { id: Number(id) },
+      data: { status: "DELETED" }, // 👈 soft delete
+    });
+
+    res.json({ message: "Task marked as deleted", task: updatedTask });
   } catch (err) {
-    console.error("Error deleting task:", err);
-    res.status(400).json({ error: "Failed to delete task", details: err.message });
+    console.error("Error soft deleting task:", err);
+    res.status(500).json({ error: "Failed to delete task", details: err.message });
   }
 });
 

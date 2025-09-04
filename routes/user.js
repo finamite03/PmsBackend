@@ -36,7 +36,7 @@ router.post("/", authenticateToken, async (req, res) => {
       });
     }
 
-    if (!["admin", "manager", "user"].includes(role)) {
+    if (!["superadmin","admin", "manager", "user"].includes(role)) {
       return res
         .status(400)
         .json({ error: "Invalid role. Must be admin, manager, or user" });

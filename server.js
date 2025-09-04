@@ -120,9 +120,56 @@ app.get("/", (req, res) => {
 });
 
 // =======================
+// AUTO-CREATE SUPERADMIN
+// =======================
+async function ensureSuperAdmin() {
+  try {
+    const superAdminEmail = "superadmin@example.com";
+    const superAdminPassword = "123456";
+
+    let superAdmin = await prisma.user.findFirst({
+      where: { role: "superadmin", email: superAdminEmail },
+    });
+
+    if (!superAdmin) {
+      console.log("⚡ No superadmin found. Creating default superadmin...");
+
+      const hashedPassword = await bcrypt.hash(superAdminPassword, SALT_ROUNDS);
+
+      superAdmin = await prisma.user.create({
+        data: {
+          name: "Super Admin",
+          email: superAdminEmail,
+          password: hashedPassword,
+          role: "superadmin",
+          status: "ACTIVE",
+          companyId: null, // ✅ not tied to a company
+          permissions: [
+            "Manage Companies",
+            "Manage Users",
+            "Manage Projects",
+            "Manage Tasks",
+            "Manage Resources",
+            "Manage Risks",
+            "View All Reports",
+          ],
+        },
+      });
+
+      console.log(`✅ Superadmin created with email: ${superAdminEmail}`);
+    } else {
+      console.log("✅ Superadmin already exists");
+    }
+  } catch (err) {
+    console.error("❌ Error ensuring superadmin:", err);
+  }
+}
+
+// =======================
 // START SERVER
 // =======================
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () =>
-  console.log(`✅ Server running on http://localhost:${PORT}`)
-);
+app.listen(PORT, async () => {
+  await ensureSuperAdmin(); // 👈 runs once on startup
+  console.log(`✅ Server running on http://localhost:${PORT}`);
+});
