@@ -1,3 +1,4 @@
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
@@ -8,21 +9,21 @@ generator client {
 }
 
 model Risk {
-  id             Int    @id @default(autoincrement()) // Risk ID
-  projectId      Int // Project ID (FK)
-  companyId      Int // Company ID (FK)
-  description    String // Risk Description
-  severityLevel  String // Severity Level (High / Medium / Low)
-  mitigationPlan String // Mitigation Plan
-  riskOwner      String // Risk Owner
-  status         String // Status (Open / Resolved)
+  id             Int      @id @default(autoincrement()) // Risk ID
+  projectId      Int                                     // Project ID (FK)
+  companyId      Int                                     // Company ID (FK)
+  description    String                                  // Risk Description
+  severityLevel  String                                  // Severity Level (High / Medium / Low)
+  mitigationPlan String                                  // Mitigation Plan
+  riskOwner      String                                  // Risk Owner
+  status         String                                  // Status (Open / Resolved)
 
   // Timestamps
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Relation to Project
-  project Project @relation(fields: [projectId], references: [id])
+  project   Project @relation(fields: [projectId], references: [id])
   company Company @relation(fields: [companyId], references: [id])
 }
 
@@ -75,7 +76,7 @@ model User {
 
 model Project {
   id             Int           @id @default(autoincrement()) // Primary Key
-  companyId      Int // Company ID (FK)
+  companyId      Int                                      // Company ID (FK)
   name           String
   clientName     String
   startDate      DateTime
@@ -91,10 +92,10 @@ model Project {
   updatedAt DateTime @updatedAt
 
   // Relations
-  company   Company    @relation(fields: [companyId], references: [id])
-  tasks     Task[]
-  risks     Risk[]
-  resources Resource[]
+  company    Company   @relation(fields: [companyId], references: [id])
+  tasks      Task[]
+  risks      Risk[]
+  resources  Resource[]
 }
 
 enum ProjectStatus {
@@ -102,6 +103,7 @@ enum ProjectStatus {
   ACTIVE
   COMPLETED
   ON_HOLD
+  DELETED
 }
 
 enum PriorityLevel {
@@ -112,13 +114,14 @@ enum PriorityLevel {
 
 model Resource {
   id              Int      @id @default(autoincrement())
-  companyId       Int // Company ID (FK)
-  resourceType    String // e.g., Developer, Designer, Equipment
-  assignedProject String // e.g., project-specific label/role
-  projectId       Int // FK to Project
-  allocationStart DateTime // When allocation starts
-  allocationEnd   DateTime // When allocation ends
-  utilizationRate Float // Utilization percentage (0–100)
+  companyId       Int                                      // Company ID (FK)
+  resourceType    String                                   // e.g., Developer, Designer, Equipment
+  assignedProject String                                   // e.g., project-specific label/role
+  projectId       Int                                      // FK to Project
+  allocationStart DateTime                                 // When allocation starts
+  allocationEnd   DateTime                                 // When allocation ends
+  utilizationRate Float                                    // Utilization percentage (0–100)
+  status          String @default("ACTIVE")                // Resource status
 
   // Timestamps
   createdAt DateTime @default(now())
@@ -130,23 +133,24 @@ model Resource {
 }
 
 model Task {
-  id        Int    @id @default(autoincrement())
-  companyId Int
-  projectId Int
-  title     String
+  id             Int      @id @default(autoincrement())
+  companyId      Int
+  projectId      Int
+  title          String
 
   // Fix: make assignedTo Int, not String
-  assignedTo   Int?
-  assignedUser User? @relation("TaskAssignedUser", fields: [assignedTo], references: [id])
+  assignedTo     Int?
+  assignedUser   User? @relation("TaskAssignedUser", fields: [assignedTo], references: [id])
 
   priority       String
   status         String
   startDate      DateTime
   endDate        DateTime
   completionDate DateTime?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  company Company @relation(fields: [companyId], references: [id])
-  project Project @relation(fields: [projectId], references: [id])
+  company        Company @relation(fields: [companyId], references: [id])
+  project        Project @relation(fields: [projectId], references: [id])
 }
+

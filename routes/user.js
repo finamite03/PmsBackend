@@ -36,7 +36,7 @@ router.post("/", authenticateToken, async (req, res) => {
       });
     }
 
-    if (!["superadmin","admin", "manager", "user"].includes(role)) {
+    if (!["superadmin", "admin", "manager", "user"].includes(role)) {
       return res
         .status(400)
         .json({ error: "Invalid role. Must be admin, manager, or user" });
@@ -56,27 +56,32 @@ router.post("/", authenticateToken, async (req, res) => {
       return res.status(404).json({ error: "Company not found" });
     }
 
-    // Check current counts against plan limits
+    // ✅ Count only ACTIVE users
     const [adminCount, managerCount, userCount] = await Promise.all([
-      prisma.user.count({ where: { companyId: parseInt(companyId), role: "admin" } }),
-      prisma.user.count({ where: { companyId: parseInt(companyId), role: "manager" } }),
-      prisma.user.count({ where: { companyId: parseInt(companyId), role: "user" } }),
+      prisma.user.count({ where: { companyId: parseInt(companyId), role: "admin", status: "ACTIVE" } }),
+      prisma.user.count({ where: { companyId: parseInt(companyId), role: "manager", status: "ACTIVE" } }),
+      prisma.user.count({ where: { companyId: parseInt(companyId), role: "user", status: "ACTIVE" } }),
     ]);
 
-    if (role === "admin" && adminCount >= company.maxAdmins) {
-      return res
-        .status(400)
-        .json({ error: `Cannot add more admins: limit of ${company.maxAdmins} reached` });
-    }
-    if (role === "manager" && managerCount >= company.maxManagers) {
-      return res
-        .status(400)
-        .json({ error: `Cannot add more managers: limit of ${company.maxManagers} reached` });
-    }
-    if (role === "user" && userCount >= company.maxUsers) {
-      return res
-        .status(400)
-        .json({ error: `Cannot add more users: limit of ${company.maxUsers} reached` });
+    // ✅ If user being created or activated as ACTIVE, enforce limits
+    const isActivating = !status || status === "ACTIVE"; // default ACTIVE
+
+    if (isActivating) {
+      if (role === "admin" && adminCount >= company.maxAdmins) {
+        return res.status(400).json({
+          error: `Cannot activate/add more admins: limit of ${company.maxAdmins} reached`,
+        });
+      }
+      if (role === "manager" && managerCount >= company.maxManagers) {
+        return res.status(400).json({
+          error: `Cannot activate/add more managers: limit of ${company.maxManagers} reached`,
+        });
+      }
+      if (role === "user" && userCount >= company.maxUsers) {
+        return res.status(400).json({
+          error: `Cannot activate/add more users: limit of ${company.maxUsers} reached`,
+        });
+      }
     }
 
     // Hash password
@@ -92,9 +97,9 @@ router.post("/", authenticateToken, async (req, res) => {
         email,
         password: hashedPassword,
         role,
-        status: status || "ACTIVE",
+        status: status || "ACTIVE", // default ACTIVE
         companyId: parseInt(companyId),
-        permissions: finalPermissions, // ✅ save permissions too
+        permissions: finalPermissions,
       },
       select: {
         id: true,
@@ -240,8 +245,7 @@ router.get("/:id", authenticateToken, async (req, res) => {
  */
 router.put("/:id", authenticateToken, async (req, res) => {
   try {
-    const { name, email, role, status, password, permissions, lastLogin } =
-      req.body;
+    const { name, email, role, status, password, permissions, lastLogin } = req.body;
 
     const existing = await prisma.user.findFirst({
       where: { id: parseInt(req.params.id), companyId: req.user.companyId }, // ✅ scoped
@@ -250,6 +254,40 @@ router.put("/:id", authenticateToken, async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
+    // ✅ Check plan before activating or changing role
+    const company = await prisma.company.findUnique({
+      where: { id: req.user.companyId },
+      select: {
+        maxAdmins: true,
+        maxManagers: true,
+        maxUsers: true,
+      },
+    });
+
+    const [adminCount, managerCount, userCount] = await Promise.all([
+      prisma.user.count({ where: { companyId: req.user.companyId, role: "admin", status: "ACTIVE" } }),
+      prisma.user.count({ where: { companyId: req.user.companyId, role: "manager", status: "ACTIVE" } }),
+      prisma.user.count({ where: { companyId: req.user.companyId, role: "user", status: "ACTIVE" } }),
+    ]);
+
+    const isActivating = status === "ACTIVE" && existing.status !== "ACTIVE";
+    const roleChanging = role && role !== existing.role;
+
+    if (isActivating || roleChanging) {
+      const finalRole = role || existing.role;
+
+      if (finalRole === "admin" && adminCount >= company.maxAdmins) {
+        return res.status(400).json({ error: `Cannot activate/add more admins: limit of ${company.maxAdmins} reached` });
+      }
+      if (finalRole === "manager" && managerCount >= company.maxManagers) {
+        return res.status(400).json({ error: `Cannot activate/add more managers: limit of ${company.maxManagers} reached` });
+      }
+      if (finalRole === "user" && userCount >= company.maxUsers) {
+        return res.status(400).json({ error: `Cannot activate/add more users: limit of ${company.maxUsers} reached` });
+      }
+    }
+
+    // ✅ Build update data
     const updateData = {
       name,
       email,
@@ -281,9 +319,7 @@ router.put("/:id", authenticateToken, async (req, res) => {
 
     res.json(user);
   } catch (error) {
-    res
-      .status(400)
-      .json({ error: "Error updating user", details: error.message });
+    res.status(400).json({ error: "Error updating user", details: error.message });
   }
 });
 

@@ -1,9 +1,10 @@
-// server.js
 import express from "express";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcrypt";
 import cors from "cors";
 import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
 
 dotenv.config();
 
@@ -12,7 +13,7 @@ import dashboardRouter from "./routes/dashboard.js";
 import budgetRoutes from "./routes/budget.js";
 import projectRoutes from "./routes/project.js";
 import resourceRoutes from "./routes/resource.js";
-import tasksRoutes from "./routes/task.js";   // ✅ renamed to match your task.js
+import tasksRoutes from "./routes/task.js";
 import userRoutes from "./routes/user.js";
 import companyRoutes from "./routes/company.js";
 
@@ -20,17 +21,24 @@ const app = express();
 const prisma = new PrismaClient();
 const SALT_ROUNDS = 10;
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// =======================
+// MIDDLEWARE
+// =======================
 app.use(express.json());
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL, // Adjust to match your React app's URL
+    origin: process.env.FRONTEND_URL,
+    credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE"],
     allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
 
 // =======================
-// MOUNT ROUTES
+// API ROUTES
 // =======================
 app.use("/api/dashboard", dashboardRouter);
 app.use("/api/risks", budgetRoutes);
@@ -41,7 +49,7 @@ app.use("/api/user", userRoutes);
 app.use("/api/company", companyRoutes);
 
 // =======================
-// USER ROUTES (inline since you handle auth here)
+// USER ROUTES
 // =======================
 app.post("/users", async (req, res) => {
   try {
@@ -82,9 +90,7 @@ app.post("/login", async (req, res) => {
       return res.status(400).json({ error: "Name and password are required" });
     }
 
-    const user = await prisma.user.findFirst({
-      where: { name },
-    });
+    const user = await prisma.user.findFirst({ where: { name } });
 
     if (!user) {
       return res.status(401).json({ error: "Invalid credentials" });
@@ -115,9 +121,24 @@ app.post("/login", async (req, res) => {
 // =======================
 // HEALTH CHECK
 // =======================
-app.get("/", (req, res) => {
-  res.send("🚀 Prisma + Express API is running!");
+app.get("/api/health", (req, res) => {
+  res.json({ status: "OK", timestamp: new Date().toISOString() });
 });
+
+// =======================
+// SERVE FRONTEND @ /PMS
+// =======================
+if (process.env.NODE_ENV === "production") {
+  const frontendPath = path.join(__dirname, "../dist");
+
+  // Serve built React app
+  app.use("/PMS", express.static(frontendPath));
+
+  // Catch-all for React Router
+  app.get("/PMS/*", (req, res) => {
+    res.sendFile(path.join(frontendPath, "index.html"));
+  });
+}
 
 // =======================
 // AUTO-CREATE SUPERADMIN
@@ -132,7 +153,7 @@ async function ensureSuperAdmin() {
     });
 
     if (!superAdmin) {
-      console.log("⚡ No superadmin found. Creating default superadmin...");
+      console.log("⚡ Creating default superadmin...");
 
       const hashedPassword = await bcrypt.hash(superAdminPassword, SALT_ROUNDS);
 
@@ -143,7 +164,7 @@ async function ensureSuperAdmin() {
           password: hashedPassword,
           role: "superadmin",
           status: "ACTIVE",
-          companyId: null, // ✅ not tied to a company
+          companyId: null,
           permissions: [
             "Manage Companies",
             "Manage Users",
@@ -156,7 +177,7 @@ async function ensureSuperAdmin() {
         },
       });
 
-      console.log(`✅ Superadmin created with email: ${superAdminEmail}`);
+      console.log(`✅ Superadmin created: ${superAdminEmail}`);
     } else {
       console.log("✅ Superadmin already exists");
     }
@@ -170,6 +191,7 @@ async function ensureSuperAdmin() {
 // =======================
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, async () => {
-  await ensureSuperAdmin(); // 👈 runs once on startup
-  console.log(`✅ Server running on http://localhost:${PORT}`);
+  await ensureSuperAdmin();
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
+  console.log(`🌍 Serving frontend`);
 });

@@ -27,6 +27,7 @@ enum ProjectStatus {
   ACTIVE
   COMPLETED
   ON_HOLD
+  DELETED
 }
 
 enum PriorityLevel {
