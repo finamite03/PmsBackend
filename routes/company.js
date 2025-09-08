@@ -141,7 +141,7 @@ router.get("/plan/:companyId", authenticateToken, async (req, res) => {
 /**
  * Update company details
  */
-router.patch("/:companyId", authenticateToken, async (req, res) => {
+router.put("/:companyId", authenticateToken, async (req, res) => {
     try {
         if (req.user.role !== "superadmin") {
             return res.status(403).json({ error: "Only superadmin can update companies" });
