@@ -17,6 +17,7 @@ model Company {
   tasks     Task[]
   risks     Risk[]
   resources Resource[]
+  budgets   Budget[]
 
   @@index([plan])
 }

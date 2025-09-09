@@ -1,0 +1,20 @@
+model ActivityLog {
+  id           Int       @id @default(autoincrement())
+  
+  entityType   EntityType  // Type of entity (Project, Budget, Risk, Task, Resource)
+  entityId     Int         // ID of the specific entity instance
+
+  action       String      // e.g., "Created", "Updated Status", "Budget Allocated"
+  oldValue     String?     // Previous state (as JSON or text)
+  newValue     String?     // New state (as JSON or text)
+
+  createdAt    DateTime    @default(now())
+}
+
+enum EntityType {
+  PROJECT
+  BUDGET
+  RISK
+  TASK
+  RESOURCE
+}

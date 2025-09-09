@@ -10,12 +10,14 @@ dotenv.config();
 
 // Import modular routes
 import dashboardRouter from "./routes/dashboard.js";
-import budgetRoutes from "./routes/budget.js";
+import riskRoutes from "./routes/risk.js";
 import projectRoutes from "./routes/project.js";
 import resourceRoutes from "./routes/resource.js";
 import tasksRoutes from "./routes/task.js";
 import userRoutes from "./routes/user.js";
 import companyRoutes from "./routes/company.js";
+import budgetRoutes from "./routes/budget.js";
+import activityRoutes from "./routes/activity.js";
 
 const app = express();
 const prisma = new PrismaClient();
@@ -41,12 +43,14 @@ app.use(
 // API ROUTES
 // =======================
 app.use("/api/dashboard", dashboardRouter);
-app.use("/api/risks", budgetRoutes);
+app.use("/api/risks", riskRoutes);
 app.use("/api/projects", projectRoutes);
 app.use("/api/resources", resourceRoutes);
 app.use("/api/tasks", tasksRoutes);
 app.use("/api/user", userRoutes);
 app.use("/api/company", companyRoutes);
+app.use("/api/budget", budgetRoutes);
+app.use("/api/activity", activityRoutes);
 
 // =======================
 // USER ROUTES
@@ -125,17 +129,14 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "OK", timestamp: new Date().toISOString() });
 });
 
-// =======================
-// SERVE FRONTEND @ /PMS
-// =======================
 if (process.env.NODE_ENV === "production") {
   const frontendPath = path.join(__dirname, "../dist");
 
   // Serve built React app
-  app.use("/PMS", express.static(frontendPath));
+  app.use("/", express.static(frontendPath));
 
   // Catch-all for React Router
-  app.get("/PMS/*", (req, res) => {
+  app.get("/*", (req, res) => {
     res.sendFile(path.join(frontendPath, "index.html"));
   });
 }

@@ -8,23 +8,47 @@ generator client {
   provider = "prisma-client-js"
 }
 
-model Risk {
-  id             Int      @id @default(autoincrement()) // Risk ID
-  projectId      Int                                     // Project ID (FK)
-  companyId      Int                                     // Company ID (FK)
-  description    String                                  // Risk Description
-  severityLevel  String                                  // Severity Level (High / Medium / Low)
-  mitigationPlan String                                  // Mitigation Plan
-  riskOwner      String                                  // Risk Owner
-  status         String                                  // Status (Open / Resolved)
+model ActivityLog {
+  id           Int       @id @default(autoincrement())
+  
+  entityType   EntityType  // Type of entity (Project, Budget, Risk, Task, Resource)
+  entityId     Int         // ID of the specific entity instance
 
-  // Timestamps
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  action       String      // e.g., "Created", "Updated Status", "Budget Allocated"
+  oldValue     String?     // Previous state (as JSON or text)
+  newValue     String?     // New state (as JSON or text)
 
-  // Relation to Project
-  project   Project @relation(fields: [projectId], references: [id])
-  company Company @relation(fields: [companyId], references: [id])
+  createdAt    DateTime    @default(now())
+}
+
+enum EntityType {
+  PROJECT
+  BUDGET
+  RISK
+  TASK
+  RESOURCE
+}
+
+model Budget {
+  id          Int       @id @default(autoincrement())
+  project     Project   @relation(fields: [projectId], references: [id])
+  projectId   Int
+
+  company     Company   @relation(fields: [companyId], references: [id])
+  companyId   Int
+
+  risk        Risk?     @relation(fields: [riskId], references: [id])
+  riskId      Int?
+
+  category    String    // e.g., "Initial Planning", "Development Phase", "Deployment"
+  allocated   Float     // Total allocated budget for this category
+  spent       Float     // Amount spent so far
+  remaining   Float     // allocated - spent
+  utilization Float     // (spent / allocated) * 100
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
 }
 
 model Company {
@@ -46,6 +70,7 @@ model Company {
   tasks     Task[]
   risks     Risk[]
   resources Resource[]
+  budgets   Budget[]
 
   @@index([plan])
 }
@@ -96,6 +121,7 @@ model Project {
   tasks      Task[]
   risks      Risk[]
   resources  Resource[]
+  budgets    Budget[]
 }
 
 enum ProjectStatus {
@@ -130,6 +156,26 @@ model Resource {
   // Relations
   company Company @relation(fields: [companyId], references: [id])
   project Project @relation(fields: [projectId], references: [id])
+}
+
+model Risk {
+  id             Int      @id @default(autoincrement()) // Risk ID
+  projectId      Int                                     // Project ID (FK)
+  companyId      Int                                     // Company ID (FK)
+  description    String                                  // Risk Description
+  severityLevel  String                                  // Severity Level (High / Medium / Low)
+  mitigationPlan String                                  // Mitigation Plan
+  riskOwner      String                                  // Risk Owner
+  status         String                                  // Status (Open / Resolved)
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relation to Project
+  project   Project @relation(fields: [projectId], references: [id])
+  company Company @relation(fields: [companyId], references: [id])
+  budgets       Budget[]
 }
 
 model Task {

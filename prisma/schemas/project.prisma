@@ -20,6 +20,7 @@ model Project {
   tasks      Task[]
   risks      Risk[]
   resources  Resource[]
+  budgets    Budget[]
 }
 
 enum ProjectStatus {

@@ -34,6 +34,16 @@ router.post("/", authenticateToken, async (req, res) => {
       },
     });
 
+    await prisma.activityLog.create({
+      data: {
+        entityType: "PROJECT",
+        entityId: newProject.id,
+        action: "Created project",
+        oldValue: null,
+        newValue: JSON.stringify(newProject),
+      },
+    });
+
     res.json(newProject);
   } catch (err) {
     res.status(500).json({ error: "Failed to create project", details: err.message });
@@ -97,6 +107,15 @@ router.put("/:id", authenticateToken, async (req, res) => {
       },
     });
 
+    await prisma.activityLog.create({
+      data: {
+        entityType: "PROJECT",
+        entityId: updatedProject.id,
+        action: "Updated project",
+        oldValue: null,
+        newValue: JSON.stringify(updatedProject),
+      },
+    });
     res.json(updatedProject);
   } catch (err) {
     res.status(500).json({ error: "Failed to update project", details: err.message });
@@ -123,6 +142,16 @@ router.delete("/:id", authenticateToken, async (req, res) => {
     const updatedProject = await prisma.project.update({
       where: { id: projectId },
       data: { status: "DELETED" }, // 👈 soft delete
+    });
+
+    await prisma.activityLog.create({
+      data: {
+        entityType: "PROJECT",
+        entityId: updatedProject.id,
+        action: "Deleted project",
+        oldValue: null,
+        newValue: JSON.stringify(updatedProject),
+      },
     });
 
     res.json({ message: "Project marked as deleted", project: updatedProject });

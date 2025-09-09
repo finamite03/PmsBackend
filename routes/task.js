@@ -55,6 +55,16 @@ router.post("/", authenticateToken, async (req, res) => {
       },
     });
 
+    await prisma.activityLog.create({
+      data: {
+        entityType: "TASK",
+        entityId: newTask.id,
+        action: "Created task",
+        oldValue: null,
+        newValue: JSON.stringify(newTask),
+      },
+    });
+
     res.status(201).json(newTask);
   } catch (err) {
     console.error("Error creating task:", err);
@@ -110,57 +120,87 @@ router.get("/:id", authenticateToken, async (req, res) => {
  */
 router.put("/:id", authenticateToken, async (req, res) => {
   try {
-    // Only admins or users with "Assign Tasks" permission can edit
-    if (!(req.user.role === "admin" || hasPermission(req.user, "Assign Tasks"))) {
-      return res.status(403).json({ error: "Not allowed to edit tasks" });
-    }
-
     const { id } = req.params;
-    const {
-      title,
-      assignedTo,
-      priority,
-      status,
-      startDate,
-      endDate,
-      completionDate,
-    } = req.body;
+    const { title, assignedTo, priority, status, startDate, endDate, completionDate } = req.body;
 
-    // Verify task belongs to the same company
     const existing = await prisma.task.findFirst({
       where: { id: Number(id), companyId: req.user.companyId },
     });
-    if (!existing) {
-      return res.status(404).json({ error: "Task not found" });
+    if (!existing) return res.status(404).json({ error: "Task not found" });
+
+    // fetch name if not in JWT
+    const dbUser = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: { name: true },
+    });
+    const userName = dbUser?.name || req.user.email || "Unknown User";
+
+    const safeStringify = (obj) =>
+      JSON.stringify(obj, (key, value) =>
+        value instanceof Date ? value.toISOString() : value
+      );
+
+    let updatedTask;
+    let action = "";
+
+    if (req.user.role === "admin") {
+      updatedTask = await prisma.task.update({
+        where: { id: Number(id) },
+        data: {
+          title,
+          assignedTo: assignedTo ? Number(assignedTo) : null,
+          priority,
+          status: status ? status.toUpperCase() : undefined,
+          startDate: startDate ? new Date(startDate) : undefined,
+          endDate: endDate ? new Date(endDate) : undefined,
+          completionDate: completionDate ? new Date(completionDate) : null,
+        },
+        include: { assignedUser: true, project: true },
+      });
+      action = `${userName} (Admin) updated task`;
+    } else if (req.user.role === "manager" && hasPermission(req.user, "Assign Tasks")) {
+      updatedTask = await prisma.task.update({
+        where: { id: Number(id) },
+        data: {
+          title,
+          assignedTo: assignedTo ? Number(assignedTo) : null,
+          priority,
+          status: status ? status.toUpperCase() : undefined,
+          startDate: startDate ? new Date(startDate) : undefined,
+          endDate: endDate ? new Date(endDate) : undefined,
+          completionDate: completionDate ? new Date(completionDate) : null,
+        },
+        include: { assignedUser: true, project: true },
+      });
+      action = `${userName} (Manager) updated task`;
+    } else if (existing.assignedTo === req.user.id) {
+      updatedTask = await prisma.task.update({
+        where: { id: Number(id) },
+        data: { status: status ? status.toUpperCase() : existing.status },
+        include: { assignedUser: true, project: true },
+      });
+      action = `${userName} updated their task status`;
+    } else {
+      return res.status(403).json({ error: "Not allowed to edit this task" });
     }
 
-    // Update task
-    const updatedTask = await prisma.task.update({
-      where: { id: Number(id) },
+    await prisma.activityLog.create({
       data: {
-        title,
-        assignedTo: assignedTo ? Number(assignedTo) : null, // ✅ safe cast
-        priority,
-        status,
-        startDate: startDate ? new Date(startDate) : undefined,
-        endDate: endDate ? new Date(endDate) : undefined,
-        completionDate: completionDate ? new Date(completionDate) : null,
-      },
-      include: {
-        assignedUser: { select: { id: true, name: true, role: true } }, // ✅ return assigned user info too
-        project: { select: { id: true, name: true } },
+        entityType: "TASK",
+        entityId: updatedTask.id,
+        action: "Updated task",
+        oldValue: null,
+        newValue: JSON.stringify(updatedTask),
       },
     });
 
-    res.json(updatedTask);
+    return res.json(updatedTask);
   } catch (err) {
     console.error("Error updating task:", err);
-    res.status(400).json({
-      error: "Failed to update task",
-      details: err.message,
-    });
+    res.status(400).json({ error: "Failed to update task", details: err.message });
   }
 });
+
 
 
 /**
@@ -179,10 +219,21 @@ router.delete("/:id", authenticateToken, async (req, res) => {
 
     if (!task) return res.status(404).json({ error: "Task not found" });
 
-    // Instead of deleting, mark as deleted
+    // Soft delete: mark as deleted
     const updatedTask = await prisma.task.update({
       where: { id: Number(id) },
-      data: { status: "DELETED" }, // 👈 soft delete
+      data: { status: "DELETED" },
+    });
+
+    // Create activity log
+    await prisma.activityLog.create({
+      data: {
+        entityType: "TASK",
+        entityId: updatedTask.id,
+        action: "Deleted task",
+        oldValue: null,
+        newValue: JSON.stringify(updatedTask),
+      },
     });
 
     res.json({ message: "Task marked as deleted", task: updatedTask });
@@ -191,5 +242,6 @@ router.delete("/:id", authenticateToken, async (req, res) => {
     res.status(500).json({ error: "Failed to delete task", details: err.message });
   }
 });
+
 
 export default router;

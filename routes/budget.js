@@ -1,126 +1,148 @@
-// routes/budget.js
 import express from "express";
 import { PrismaClient } from "@prisma/client";
-import { authenticateToken } from "../middleware/auth.js"; // <-- add this
+import { authenticateToken } from "../middleware/auth.js";
+import { hasPermission } from "../utils/permission.js";
 
-const router = express.Router();
 const prisma = new PrismaClient();
-
-// Apply authentication to all routes
-router.use(authenticateToken);
+const router = express.Router();
 
 /**
- * CREATE a new Risk
+ * CREATE a new Budget
  */
-router.post("/", async (req, res) => {
-  try {
-    const { projectId, description, severityLevel, mitigationPlan, riskOwner, status } = req.body;
+router.post("/", authenticateToken, async (req, res) => {
+    try {
+        // if (!(req.user.role === "admin" || hasPermission(req.user, "Create Budgets"))) {
+        //     return res.status(403).json({ error: "Not allowed to create budgets" });
+        // }
 
-    // Ensure project belongs to the same company
-    const project = await prisma.project.findFirst({
-      where: { id: projectId, companyId: req.user.companyId },
-    });
+        if (!req.user.companyId) {
+            return res.status(400).json({ error: "Company ID missing in user token" });
+        }
 
-    if (!project) return res.status(403).json({ error: "Invalid project for this company" });
+        const { projectId, category, allocated, spent = 0, riskId } = req.body;
+        const remaining = allocated - spent;
+        const utilization = allocated > 0 ? (spent / allocated) * 100 : 0;
 
-    const newRisk = await prisma.risk.create({
-      data: {
-        projectId,
-        description,
-        severityLevel,
-        mitigationPlan,
-        riskOwner,
-        status,
-        companyId: req.user.companyId, // <--- enforce multitenancy
-      },
-    });
+        const newBudget = await prisma.budget.create({
+            data: {
+                category,
+                allocated,
+                spent,
+                remaining,
+                utilization,
+                project: { connect: { id: projectId } },
+                company: { connect: { id: req.user.companyId } },
+                ...(riskId ? { risk: { connect: { id: riskId } } } : {}),
+            },
+        });
 
-    res.json(newRisk);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to create risk" });
-  }
+        await prisma.activityLog.create({
+            data: {
+                entityType: "BUDGET",
+                entityId: newBudget.id,
+                action: "Created budget",
+                oldValue: null,
+                newValue: JSON.stringify(newBudget),
+            },
+        });
+
+        res.json(newBudget);
+    } catch (err) {
+        res.status(500).json({ error: "Failed to create budget", details: err.message });
+    }
 });
 
 /**
- * READ all Risks
+ * READ all Budgets for the company
  */
-router.get("/", async (req, res) => {
-  try {
-    const risks = await prisma.risk.findMany({
-      where: { companyId: req.user.companyId },
-      include: { project: true },
-    });
-    res.json(risks);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to fetch risks" });
-  }
+router.get("/", authenticateToken, async (req, res) => {
+    try {
+        const budgets = await prisma.budget.findMany({
+            where: { companyId: req.user.companyId },
+            include: { project: true, risk: true },
+        });
+
+        res.json(budgets);
+    } catch (err) {
+        res.status(500).json({ error: "Failed to fetch budgets", details: err.message });
+    }
 });
 
 /**
- * READ single Risk by ID
+ * UPDATE a Budget
  */
-router.get("/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const risk = await prisma.risk.findFirst({
-      where: { id: Number(id), companyId: req.user.companyId },
-      include: { project: true },
-    });
+router.put("/:id", authenticateToken, async (req, res) => {
+    try {
+        if (!(req.user.role === "admin" || hasPermission(req.user, "Edit Budgets"))) {
+            return res.status(403).json({ error: "Not allowed to edit budgets" });
+        }
 
-    if (!risk) return res.status(404).json({ error: "Risk not found" });
-    res.json(risk);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to fetch risk" });
-  }
+        const { id } = req.params;
+        const { category, allocated, spent, riskId } = req.body;
+
+        const existing = await prisma.budget.findFirst({
+            where: { id: Number(id), companyId: req.user.companyId },
+        });
+        if (!existing) return res.status(404).json({ error: "Budget not found" });
+
+        const remaining = allocated - spent;
+        const utilization = allocated > 0 ? (spent / allocated) * 100 : 0;
+
+        const updatedBudget = await prisma.budget.update({
+            where: { id: Number(id) },
+            data: { category, allocated, spent, remaining, utilization, riskId },
+        });
+
+        // Log the update
+        await prisma.activityLog.create({
+            data: {
+                entityType: "BUDGET",
+                entityId: updatedBudget.id,
+                action: "Updated budget",
+                oldValue: JSON.stringify(existing),
+                newValue: JSON.stringify(updatedBudget),
+            },
+        });
+
+        res.json(updatedBudget);
+    } catch (err) {
+        res.status(500).json({ error: "Failed to update budget", details: err.message });
+    }
 });
 
 /**
- * UPDATE a Risk
+ * DELETE a Budget (hard delete)
  */
-router.put("/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { description, severityLevel, mitigationPlan, riskOwner, status } = req.body;
+router.delete("/:id", authenticateToken, async (req, res) => {
+    try {
+        if (!(req.user.role === "admin" || hasPermission(req.user, "Delete Budgets"))) {
+            return res.status(403).json({ error: "Not allowed to delete budgets" });
+        }
 
-    // First check ownership
-    const risk = await prisma.risk.findFirst({
-      where: { id: Number(id), companyId: req.user.companyId },
-    });
-    if (!risk) return res.status(404).json({ error: "Risk not found or not in your company" });
+        const { id } = req.params;
 
-    const updatedRisk = await prisma.risk.update({
-      where: { id: Number(id) },
-      data: { description, severityLevel, mitigationPlan, riskOwner, status },
-    });
+        const existing = await prisma.budget.findFirst({
+            where: { id: Number(id), companyId: req.user.companyId },
+        });
+        if (!existing) return res.status(404).json({ error: "Budget not found" });
 
-    res.json(updatedRisk);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to update risk" });
-  }
-});
+        await prisma.budget.delete({ where: { id: Number(id) } });
 
-/**
- * DELETE a Risk
- */
-router.delete("/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
+        // Log the deletion
+        await prisma.activityLog.create({
+            data: {
+                entityType: "BUDGET",
+                entityId: Number(id),
+                action: "Deleted budget",
+                oldValue: JSON.stringify(existing),
+                newValue: null,
+            },
+        });
 
-    const risk = await prisma.risk.findFirst({
-      where: { id: Number(id), companyId: req.user.companyId },
-    });
-    if (!risk) return res.status(404).json({ error: "Risk not found or not in your company" });
-
-    await prisma.risk.delete({ where: { id: Number(id) } });
-    res.json({ message: "Risk deleted successfully" });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to delete risk" });
-  }
+        res.json({ message: "Budget deleted successfully" });
+    } catch (err) {
+        res.status(500).json({ error: "Failed to delete budget", details: err.message });
+    }
 });
 
 export default router;

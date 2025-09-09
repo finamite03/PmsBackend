@@ -2,7 +2,7 @@
 import express from "express";
 import { PrismaClient } from "@prisma/client";
 import { authenticateToken } from "../middleware/auth.js";
-import { hasPermission } from "../utils/permission.js"; 
+import { hasPermission } from "../utils/permission.js";
 
 const prisma = new PrismaClient();
 const router = express.Router();
@@ -45,6 +45,16 @@ router.post("/", authenticateToken, async (req, res) => {
       include: { project: true },
     });
 
+    await prisma.activityLog.create({
+      data: {
+        entityType: "RESOURCE",
+        entityId: newResource.id,
+        action: "Created resource",
+        oldValue: null,
+        newValue: JSON.stringify(newResource),
+      },
+    });
+
     res.json(newResource);
   } catch (err) {
     console.error("Error creating resource:", err);
@@ -73,9 +83,7 @@ router.get("/", authenticateToken, async (req, res) => {
         where: {
           companyId: req.user.companyId,
           project: {
-            tasks: {
-              some: { assignedTo: req.user.id }, // ✅ restrict by user's assigned tasks
-            },
+            companyId: req.user.companyId, // ✅ allow all projects in same company
           },
         },
         include: { project: true },
@@ -154,6 +162,16 @@ router.put("/:id", authenticateToken, async (req, res) => {
         status: status || existing.status, // ✅ update if provided
       },
       include: { project: true }, // ✅ return project info for UI
+    });
+
+    await prisma.activityLog.create({
+      data: {
+        entityType: "RESOURCE",
+        entityId: updatedResource.id,
+        action: "Updated resource",
+        oldValue: null,
+        newValue: JSON.stringify(updatedResource),
+      },
     });
 
     res.json(updatedResource);
