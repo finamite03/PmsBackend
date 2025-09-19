@@ -142,6 +142,10 @@ app.get("/api/health", (req, res) => {
 
 // }
 
+app.get("/", (req, res) => {
+  res.send("✅ Backend is live and running!");
+});
+
 // =======================
 // AUTO-CREATE SUPERADMIN
 // =======================
