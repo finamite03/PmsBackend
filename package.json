@@ -18,7 +18,7 @@
     "dev": "nodemon server.js",
     "start": "node server.js",
     "debug": "node --inspect server.js",
-    "migrate": "prisma migrate dev",
+    "migrate": "npx prisma generate && npx prisma migrate deploy",
     "generate": "prisma generate",
     "merge": "node mergeSchemas.js"
   },

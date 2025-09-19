@@ -129,18 +129,18 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "OK", timestamp: new Date().toISOString() });
 });
 
-if (process.env.NODE_ENV === "production") {
-  const frontendPath = path.join(__dirname, "../dist");
+// if (process.env.NODE_ENV === "production") {
+//   const frontendPath = path.join(__dirname, "../dist");
 
-  // Serve built React app
-  app.use("/", express.static(frontendPath));
+//   // Serve built React app
+//   app.use("/", express.static(frontendPath));
 
-  // Catch-all for React Router
-  app.get(/.*/, (req, res) => {
-    res.sendFile(path.join(frontendPath, 'index.html'));
-  });
+//   // Catch-all for React Router
+//   app.get(/.*/, (req, res) => {
+//     res.sendFile(path.join(frontendPath, 'index.html'));
+//   });
 
-}
+// }
 
 // =======================
 // AUTO-CREATE SUPERADMIN
